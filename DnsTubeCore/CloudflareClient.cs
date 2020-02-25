@@ -93,7 +93,7 @@ namespace DnsTubeCore
             }
         }
 
-        public DnsJsonObjects.DnsUpdateResponse UpdateDnsEntry(string zoneIdentifier, string dnsRecordIdentifier, string recordType, string dnsRecordName,  string content, string proxied)
+        public DnsJsonObjects.DnsUpdateResponse UpdateDnsEntry(string zoneIdentifier, string dnsRecordIdentifier, string recordType, string dnsRecordName,  string content, bool proxied)
         {
             try
             {

@@ -128,11 +128,11 @@ namespace DnsTubeCore
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    UseShellExecute = true,
+                    UseShellExecute = false,
                     CreateNoWindow = true,
                     FileName = "route",
                     Arguments = $"add -p {target.ToString()} mask 255.255.255.255 {gateway.ToString()}",
-                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
                     StandardOutputEncoding = Encoding.ASCII
                 }
             };
