@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LogManagement;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,10 +14,16 @@ namespace DnsTubeCore
 
     public static class Program
     {
-        
+        static DateTime startedTime = DateTime.Now;
         static int Main(string[] args)
         {
+
             var arguments = Debugger.IsAttached ? File.ReadAllText("parameters.txt") : string.Join(" ", args);
+
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            Log.LogFileName = Log.DefaultLogFileName;
+            Log.LogEvent += Log_LogEvent;
+            log($"Started at {startedTime}");
 
             MethodInfo doWork = typeof(Program).GetMethod("DoWork", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
             var _paramaters = doWork.GetParameters();
@@ -25,12 +32,18 @@ namespace DnsTubeCore
                 Dictionary<string, string> parameters = new Dictionary<string, string>();
                 Regex commandParse = new Regex(@"(?<Argument>(?<Parameter>(?<=--)[^\s]+)\s+((?<Value>[^\s]+|(?<Value>""[^""]+"")))\s*)+", RegexOptions.Compiled);
                 MatchCollection matches = commandParse.Matches(arguments);
+                
                 foreach (ParameterInfo pinfo in _paramaters)
                 {
                     parameters.Add(pinfo.Name, (from Match match in matches
                                                 where match.Groups["Parameter"].Value.Contains(pinfo.Name, StringComparison.InvariantCultureIgnoreCase)
                                                 select match.Groups["Value"].Value).FirstOrDefault());
                 }
+                var _stringOfParam = string.Join(' ', (from ParameterInfo pmInfo in _paramaters
+                                  where parameters[pmInfo.Name] != null
+                                  select $"--{pmInfo.Name} {((pmInfo.Name == "apikey" || pmInfo.Name == "token") ? parameters[pmInfo.Name] : new String('*', parameters[pmInfo.Name].Length)) }").ToArray());
+
+                log($"Invoking doWork with parameters: { _stringOfParam }");
                 doWork.Invoke(null, parameters.Values.ToArray());
             }
             else
@@ -58,12 +71,14 @@ namespace DnsTubeCore
                     .Where(a => a.NetworkDestination.ToString() == "0.0.0.0")
                     .Select(a => a.Gateway).FirstOrDefault();
                 publicIP = new PublicIPAddress(new List<IPAddress>() { gatewayIP }).FirstOrDefault();
+                log($"No gateway specified. Detected default gateway \"{gatewayIP.ToString()}\"");
             }
             else if(string.IsNullOrEmpty(gateway) && defaultRoutingIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
             {
                 publicIP = defaultRoutingIp;
             }
-             
+            log($"Public Ip detected as \"{publicIP.ToString()}\"");
+
             var ipType = (publicIP.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA");
 
             CloudflareClient cloudflareClient = new CloudflareClient()
@@ -72,25 +87,55 @@ namespace DnsTubeCore
                 IsKeyOrToken = string.IsNullOrEmpty(apikey) ? KeyOrToken.Token : KeyOrToken.Key,
                 APIKeyOrToken = string.IsNullOrEmpty(apikey) ? token : apikey
             };
-            var zone = (from Zone z in cloudflareClient.Zones
-                       from CloudFlareDnsResult d in z.DnsEntries
-                       where d.Name.Contains(hostname, StringComparison.InvariantCultureIgnoreCase)
-                       where d.Type == ipType
+            var record = (from Zone z in cloudflareClient.Zones
+                        from CloudFlareDnsResult d in z.DnsEntries
+                        where d.Name.Contains(hostname, StringComparison.InvariantCultureIgnoreCase)
+                        where d.Type == ipType
                         select new { Zone = z, DnsEntry = d }).FirstOrDefault();
-            if(zone != null)
+            if(record != null)
             {
-                var result = cloudflareClient.UpdateDnsEntry(zone.Zone.Id,
-                    zone.DnsEntry.Id,
+                log($"Updating Zone \"{record.Zone.Name}({record.Zone.Id})\", DNSEntry \"{record.DnsEntry.Name}({record.DnsEntry.Id})\" of type \"{ipType}\"");
+                var result = cloudflareClient.UpdateDnsEntry(record.Zone.Id,
+                    record.DnsEntry.Id,
                     ipType,
-                    zone.DnsEntry.Name,
+                    record.DnsEntry.Name,
                     publicIP.ToString(),
-                    zone.DnsEntry.Proxied);
-                
+                    record.DnsEntry.Proxied);
             }
             else
             {
-                throw new ApplicationException($"There is no {ipType} type in any zones for hostname \"{hostname}\"");
+                throw new ApplicationException($"There is no {ipType} type in any zones for hostname \"{hostname}\". Perhaps it has not been added? ;)");
             }
+        }
+        private static void Log_LogEvent(string message, string threadName, LogManagement.LogLevel level)
+        {
+            switch (level)
+            {
+                case LogManagement.LogLevel.Information:
+                    Console.ForegroundColor = ConsoleColor.White;
+                    break;
+                case LogManagement.LogLevel.Warning:
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    break;
+                case LogManagement.LogLevel.Error:
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    break;
+                default:
+                    break;
+            }
+            Console.WriteLine(message);
+        }
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            Log.Informational($"Terminating with error at {DateTime.Now}, with a duration of {(DateTime.Now - startedTime).TotalMinutes}");
+            Log.Exception((Exception)e.ExceptionObject);
+            Log.LogFileName = string.Empty;
+            Environment.Exit(-1);
+        }
+
+        private static void log(string str)
+        {
+            Log.Informational(str);
         }
     }
 }
