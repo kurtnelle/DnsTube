@@ -1,18 +1,21 @@
 ﻿Command line application to update Cloudflare DNS entries with the public ip address that has been
 detected via lookup on http://ipv4bot.whatismyipaddress.com or http://ipv6bot.whatismyipaddress.com
 
-Parameters:
+## Parameters
 
---hostname
+\-\-hostname
+
 	(required)
 	the FQND of the target in cloudflare that must be updated. If the gateway is ipv4 the the 'A'
 	type will be udpated if the gateway is ipv6 then the 'AAAA' type will be udpated.
 
---email
+\-\-email
+
 	(required)
 	the email address (i.e. username) of the cloudflare account
 
---gateway 
+\-\-gateway 
+
 	(optional)
 	the remote gateway to use to determine the public ip address. 
 	Some networks are multi homed (more than one internet connection = more than one gateway)
@@ -28,15 +31,18 @@ Parameters:
 	then specify it as "::". The application will lookup the first ipv6 address that can reach
 	www.cloudflare.com. It will then use that ip as the value for the record.
 
---apikey
+\-\-apikey
+
 	(optional if token is not specified)
 	The apikey from the cloudflare portal. Treat this as a password!
 
---token
+\-\-token
+
 	(optional if apikey is not specified)
 	The token from the cloudflare portal. Treat this as a userid and password!!!!
 
-Example:
+Examples:
+
 	autodetect best gateway either ipv4 or ipv6 using apikey
 	--hostname home.contoso.com --email user@contoso.com --apikey C56a418065aa...
 
