@@ -30,6 +30,7 @@ Contributions are welcome!
 ## Authors
 
 * **D'Arcy Rittich**
+* **kurtnelle**
 
 ## Roadmap
 
@@ -37,11 +38,12 @@ Contributions are welcome!
 * Support for Cloudflare API tokens
 * Support for IPv6
 * Check for updates
+* Dotnet Core, command line utility that can update cloudflare based on multiple gateway/ip stack configurations (windows only)
 
 ### Next Up:
 * Run as a Windows service
 * Optional Startup shortcut creation
-
+* Debian support of command line utility
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](/LICENSE) file for details.
