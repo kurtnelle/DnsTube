@@ -38,7 +38,7 @@ Contributions are welcome!
 * Support for Cloudflare API tokens
 * Support for IPv6
 * Check for updates
-* Dotnet Core, command line utility that can update cloudflare based on multiple gateway/ip configurations (windows only)
+* Dotnet Core, command line utility that can update cloudflare based on multiple gateway/ip stack configurations (windows only)
 
 ### Next Up:
 * Run as a Windows service
