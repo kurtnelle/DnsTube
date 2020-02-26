@@ -43,6 +43,29 @@ namespace DnsTubeCore
 
         static void DoWork(string hostname, string gateway, string email, string apikey, string token)
         {
+            var defaultRoutingIp = PublicIPAddress.DefaultRoutingIp;
+            IPAddress gatewayIP, publicIP = null;
+            if (!string.IsNullOrEmpty(gateway))
+            {
+                gatewayIP = IPAddress.Parse(gateway);
+                publicIP = new PublicIPAddress(new List<IPAddress>() { gatewayIP }).FirstOrDefault();
+            }
+            else if (defaultRoutingIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                gatewayIP = new RouteTable()
+                    .ActiveRoutes
+                    .Where(a => a.Interface.ToString() == defaultRoutingIp.ToString())
+                    .Where(a => a.NetworkDestination.ToString() == "0.0.0.0")
+                    .Select(a => a.Gateway).FirstOrDefault();
+                publicIP = new PublicIPAddress(new List<IPAddress>() { gatewayIP }).FirstOrDefault();
+            }
+            else if(string.IsNullOrEmpty(gateway) && defaultRoutingIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                publicIP = defaultRoutingIp;
+            }
+             
+            var ipType = (publicIP.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA");
+
             CloudflareClient cloudflareClient = new CloudflareClient()
             {
                 EmailAddress = email,
@@ -52,13 +75,13 @@ namespace DnsTubeCore
             var zone = (from Zone z in cloudflareClient.Zones
                        from CloudFlareDnsResult d in z.DnsEntries
                        where d.Name.Contains(hostname, StringComparison.InvariantCultureIgnoreCase)
-                       select new { Zone = z, DnsEntry = d }).FirstOrDefault();
+                       where d.Type == ipType
+                        select new { Zone = z, DnsEntry = d }).FirstOrDefault();
             if(zone != null)
             {
-                var publicIP = new PublicIPAddress(gateway).FirstOrDefault();
                 var result = cloudflareClient.UpdateDnsEntry(zone.Zone.Id,
                     zone.DnsEntry.Id,
-                    IPAddress.Parse(gateway).AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA",
+                    ipType,
                     zone.DnsEntry.Name,
                     publicIP.ToString(),
                     zone.DnsEntry.Proxied);
@@ -66,7 +89,7 @@ namespace DnsTubeCore
             }
             else
             {
-                throw new ApplicationException("None of the zones have a hostname \"{hostname}\"");
+                throw new ApplicationException($"There is no {ipType} type in any zones for hostname \"{hostname}\"");
             }
         }
     }

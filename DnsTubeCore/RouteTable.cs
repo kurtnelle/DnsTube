@@ -7,10 +7,11 @@ using System.Text.RegularExpressions;
 using System.Net;
 using System.Data;
 using System.IO;
+using System.Diagnostics;
 
 namespace DnsTubeCore
 {
-    public class RouteParser
+    public class RouteTable
     {
         public List<ActiveRouteIpv4> ActiveRoutes { get; protected set; } = new List<ActiveRouteIpv4>();
         public List<PersistentRouteIpv4> PersistentRoutes { get; protected set; } = new List<PersistentRouteIpv4>();
@@ -25,7 +26,42 @@ namespace DnsTubeCore
             }
         }
 
-        public RouteParser(string responseFromRoutePrint)
+        public List<IPAddress> PotentiallyPublicIpv6Addreses {
+            get {
+                return (from Ipv6Route ip in Ipv6Routes
+                        where !ip.NetworkDestination.IsIPv6LinkLocal &&
+                        ip.FixedBitCount == 128 && ip.NetworkDestination.ToString() != "::1"
+                        select ip.NetworkDestination).ToList();
+            }
+        }
+
+        public List<IPAddress> PotentiallyPublicIpv4Addresses {
+            get {
+                var zerosIP = IPAddress.Parse("0.0.0.0");
+                return (from ActiveRouteIpv4 ip in ActiveRoutes
+                        where ip.NetworkDestination == zerosIP && ip.Gateway == null
+                        select ip.Interface).ToList();
+            }
+        }
+
+        public RouteTable()
+        {
+            Process p = new Process()
+            {
+                StartInfo = new ProcessStartInfo()
+                {
+                    UseShellExecute = false,
+                    FileName = "route",
+                    Arguments = "print",
+                    RedirectStandardOutput = true,
+                    StandardOutputEncoding = Encoding.ASCII
+                }
+            };
+            p.Start();
+            var _response = p.StandardOutput.ReadToEnd();
+            ParseOutput(_response);
+        }
+        protected void ParseOutput(string responseFromRoutePrint)
         {
             Regex sectionSplit = new Regex(@"(=+(?<Table>[^=]+))+", RegexOptions.Compiled | RegexOptions.Singleline);
             CaptureCollection _captures = sectionSplit.Match(responseFromRoutePrint).Groups["Table"].Captures;
@@ -96,12 +132,14 @@ namespace DnsTubeCore
                     }
                     foreach (DataRow _row in _dataTable.Rows)
                     {
+                        var peices = ((string)_row["NetworkDestination"]).Split('/');
                         var _ipv6Route = new Ipv6Route()
                         {
                             RouteType = _type,
                             If = int.Parse((string)_row["If"]),
                             Metric = int.Parse((string)_row["Metric"]),
-                            NetworkDestination = IPAddress.Parse(((string)_row["NetworkDestination"]).Split('/')[0]),
+                            NetworkDestination = IPAddress.Parse(peices[0]),
+                            FixedBitCount = int.Parse(peices[1]),
                             Gateway = (string)_row["Gateway"] != "On-link" ? IPAddress.Parse(((string)_row["Gateway"]).Split('/')[0]) : null
                         };
                         Ipv6Routes.Add(_ipv6Route);
@@ -158,8 +196,9 @@ namespace DnsTubeCore
     {
         public int If { get; set; }
         public int Metric { get; set; }
-        public IPAddress NetworkDestination { get; set; }     
+        public IPAddress NetworkDestination { get; set; }
         public IPAddress Gateway { get; set; }
+        public int FixedBitCount { get; set; }
         public Ipv6RouteType RouteType { get; set; }
     }
 
