@@ -19,16 +19,17 @@ namespace DnsTubeCore
         {
 
             var arguments = Debugger.IsAttached ? File.ReadAllText("parameters.txt") : string.Join(" ", args);
-
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            Log.LogFileName = Log.DefaultLogFileName;
-            Log.LogEvent += Log_LogEvent;
-            log($"Started at {startedTime}");
+            
 
             MethodInfo doWork = typeof(Program).GetMethod("DoWork", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
             var _paramaters = doWork.GetParameters();
             if (!string.IsNullOrEmpty(arguments))
             {
+                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+                Log.LogFileName = Log.DefaultLogFileName;
+                Log.LogEvent += Log_LogEvent;
+                log($"Started at {startedTime}");
+
                 Dictionary<string, string> parameters = new Dictionary<string, string>();
                 Regex commandParse = new Regex(@"(?<Argument>(?<Parameter>(?<=--)[^\s]+)\s+((?<Value>[^\s]+|(?<Value>""[^""]+"")))\s*)+", RegexOptions.Compiled);
                 MatchCollection matches = commandParse.Matches(arguments);
@@ -48,7 +49,7 @@ namespace DnsTubeCore
             }
             else
             {
-                //show help text
+                Console.Write(Resource.help);
             }
             
             return 0; 
