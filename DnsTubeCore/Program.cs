@@ -8,6 +8,7 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace DnsTubeCore
 {
@@ -17,9 +18,10 @@ namespace DnsTubeCore
         static DateTime startedTime = DateTime.Now;
         static int Main(string[] args)
         {
+            //WaitForDebugger();
 
             var arguments = Debugger.IsAttached ? File.ReadAllText("parameters.txt") : string.Join(" ", args);
-            
+
 
             MethodInfo doWork = typeof(Program).GetMethod("DoWork", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
             var _paramaters = doWork.GetParameters();
@@ -33,7 +35,7 @@ namespace DnsTubeCore
                 Dictionary<string, string> parameters = new Dictionary<string, string>();
                 Regex commandParse = new Regex(@"(?<Argument>(?<Parameter>(?<=--)[^\s]+)\s+((?<Value>[^\s]+|(?<Value>""[^""]+"")))\s*)+", RegexOptions.Compiled);
                 MatchCollection matches = commandParse.Matches(arguments);
-                
+
                 foreach (ParameterInfo pinfo in _paramaters)
                 {
                     parameters.Add(pinfo.Name, (from Match match in matches
@@ -41,8 +43,8 @@ namespace DnsTubeCore
                                                 select match.Groups["Value"].Value).FirstOrDefault());
                 }
                 var _stringOfParam = string.Join(' ', (from ParameterInfo pmInfo in _paramaters
-                                  where parameters[pmInfo.Name] != null
-                                  select $"--{pmInfo.Name} {((pmInfo.Name == "apikey" || pmInfo.Name == "token") ? parameters[pmInfo.Name] : new String('*', parameters[pmInfo.Name].Length)) }").ToArray());
+                                                       where parameters[pmInfo.Name] != null
+                                                       select $"--{pmInfo.Name} {((pmInfo.Name == "apikey" || pmInfo.Name == "token") ? parameters[pmInfo.Name] : new String('*', parameters[pmInfo.Name].Length)) }").ToArray());
 
                 log($"Invoking doWork with parameters: { _stringOfParam }");
                 doWork.Invoke(null, parameters.Values.ToArray());
@@ -51,8 +53,27 @@ namespace DnsTubeCore
             {
                 Console.Write(Resource.help);
             }
-            
-            return 0; 
+
+            return 0;
+        }
+
+        private static void WaitForDebugger()
+        {
+            uint counter = 0;
+            var charArray = new char[] { '-', '\\', '|', '/' };
+            while (true)
+            {
+                if (Debugger.IsAttached)
+                {
+                    break;
+                }
+                else
+                {
+                    Console.Write($"\rWaiting on debugger { charArray[counter % 4] } ");
+                    counter++;
+                    Thread.Sleep(100);
+                }
+            }
         }
 
         static void DoWork(string hostname, string gateway, string email, string apikey, string token)

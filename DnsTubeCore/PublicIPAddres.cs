@@ -7,8 +7,10 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Permissions;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DnsTubeCore
 {
@@ -91,13 +93,26 @@ namespace DnsTubeCore
         public static IPAddress DefaultRoutingIp {
             get {
                 IPAddress remoteIp = Dns.GetHostEntry("www.cloudflare.com").AddressList.FirstOrDefault();
-                IPEndPoint remoteEndPoint = new IPEndPoint(remoteIp, 0);
-                Socket socket = new Socket(
-                                      remoteIp.AddressFamily,
-                                      SocketType.Dgram,
-                                      ProtocolType.Udp);
-                IPEndPoint localEndPoint = QueryRoutingInterface(socket, remoteEndPoint);
-                return localEndPoint.Address;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    IPEndPoint remoteEndPoint = new IPEndPoint(remoteIp, 0);
+                    Socket socket = new Socket(
+                                          remoteIp.AddressFamily,
+                                          SocketType.Dgram,
+                                          ProtocolType.Udp);
+                    IPEndPoint localEndPoint = QueryRoutingInterface(socket, remoteEndPoint);
+                    return localEndPoint.Address;
+                }
+                else if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux)){
+                    Regex srcExpression = new Regex(@"(?<ip>(?<=src\s)[abcdef0123456789:]+(?=\s))", RegexOptions.Compiled);
+                    var result = $"ip route get {remoteIp.ToString()}".Bash();
+                    Match match = srcExpression.Match(result);
+                    return IPAddress.Parse(match.Groups["ip"].Value);
+                }
+                else
+                {
+                    throw new NotSupportedException("Platform is not supported at this time.");
+                }
             }
         }
 
