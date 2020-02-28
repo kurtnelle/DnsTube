@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.ServiceProcess;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -23,18 +25,39 @@ namespace DnsTubeCore
             var arguments = Debugger.IsAttached ? File.ReadAllText("parameters.txt") : string.Join(" ", args);
 
 
-            MethodInfo doWork = typeof(Program).GetMethod("DoWork", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var _paramaters = doWork.GetParameters();
+
             if (!string.IsNullOrEmpty(arguments))
             {
-                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-                Log.LogFileName = Log.DefaultLogFileName;
-                Log.LogEvent += Log_LogEvent;
-                log($"Started at {startedTime}");
+                ParseArgumentsAndInvoke(arguments);
+            }
+            else
+            {
+                Console.Write(Resource.help);
+            }
 
-                Dictionary<string, string> parameters = new Dictionary<string, string>();
-                Regex commandParse = new Regex(@"(?<Argument>(?<Parameter>(?<=--)[^\s]+)\s+((?<Value>[^\s]+|(?<Value>""[^""]+"")))\s*)+", RegexOptions.Compiled);
-                MatchCollection matches = commandParse.Matches(arguments);
+            return 0;
+        }
+
+        private static void ParseArgumentsAndInvoke(string arguments)
+        {
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            Log.LogFileName = Log.DefaultLogFileName;
+            Log.LogEvent += Log_LogEvent;
+            log($"Started at {startedTime}");
+
+            Dictionary<string, string> parameters = new Dictionary<string, string>();
+            Regex commandParse = new Regex(@"(?<Argument>(?<Parameter>(?<=--)[^\s]+)\s+((?<Value>[^\s]+|(?<Value>""[^""]+"")))\s*)+", RegexOptions.Compiled);
+            MatchCollection matches = commandParse.Matches(arguments);
+
+            var serviceCall = (from Match match in matches
+                              where match.Groups["Parameter"].Value.Contains("service", StringComparison.InvariantCultureIgnoreCase)
+                              select match.Groups["Value"].Value).FirstOrDefault();
+
+            if (serviceCall == null)
+            {
+
+                MethodInfo doWork = typeof(Program).GetMethod("DoWork", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                var _paramaters = doWork.GetParameters();
 
                 foreach (ParameterInfo pinfo in _paramaters)
                 {
@@ -51,10 +74,19 @@ namespace DnsTubeCore
             }
             else
             {
-                Console.Write(Resource.help);
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    ServiceBase.Run(new WindowsService());
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    new LinuxService();
+                }
+                else
+                {
+                    throw new NotSupportedException("Platform is not supported at this time.");
+                }
             }
-
-            return 0;
         }
 
         private static void WaitForDebugger()
@@ -76,7 +108,7 @@ namespace DnsTubeCore
             }
         }
 
-        static void DoWork(string hostname, string gateway, string email, string apikey, string token)
+        private static void DoWork(string hostname, string gateway, string email, string apikey, string token)
         {
             var defaultRoutingIp = PublicIPAddress.DefaultRoutingIp;
             IPAddress gatewayIP, publicIP = null;
@@ -154,7 +186,6 @@ namespace DnsTubeCore
             Log.LogFileName = string.Empty;
             Environment.Exit(-1);
         }
-
         private static void log(string str)
         {
             Log.Informational(str);

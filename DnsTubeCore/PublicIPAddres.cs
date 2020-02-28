@@ -142,43 +142,66 @@ namespace DnsTubeCore
 
         protected void AddRoute(IPAddress target, IPAddress gateway)
         {
-            Process p = new Process()
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                StartInfo = new ProcessStartInfo
+
+                Process p = new Process()
                 {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    FileName = "route",
-                    Arguments = $"add -p {target.ToString()} mask 255.255.255.255 {gateway.ToString()}",
-                    RedirectStandardOutput = true,
-                    StandardOutputEncoding = Encoding.ASCII
+                    StartInfo = new ProcessStartInfo
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        FileName = "route",
+                        Arguments = $"add -p {target.ToString()} mask 255.255.255.255 {gateway.ToString()}",
+                        RedirectStandardOutput = true,
+                        StandardOutputEncoding = Encoding.ASCII
+                    }
+                };
+                p.Start();
+                var _response = p.StandardOutput.ReadToEnd();
+                if (_response.Contains("The requested operation requires elevation."))
+                {
+                    throw new ApplicationException("Runing the \"route add\" command requires elevation. Run this tool as administrator.");
                 }
-            };
-            p.Start();
-            var _response = p.StandardOutput.ReadToEnd();
-            if(_response.Contains("The requested operation requires elevation."))
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                throw new ApplicationException("Runing the \"route add\" command requires elevation. Run this tool as administrator.");
+                $"sudo ip route add {target.ToString()} via {gateway.ToString()}".Bash();
+            }
+            else
+            {
+                throw new NotSupportedException("Platform is not supported at this time.");
             }
         }
         protected void RemoveRoute(IPAddress target)
         {
-            Process p = new Process()
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                StartInfo = new ProcessStartInfo()
+                Process p = new Process()
                 {
-                    UseShellExecute = false,
-                    FileName = "route",
-                    Arguments = $"delete {target.ToString()}",
-                    RedirectStandardOutput = true,
-                    StandardOutputEncoding = Encoding.ASCII
+                    StartInfo = new ProcessStartInfo()
+                    {
+                        UseShellExecute = false,
+                        FileName = "route",
+                        Arguments = $"delete {target.ToString()}",
+                        RedirectStandardOutput = true,
+                        StandardOutputEncoding = Encoding.ASCII
+                    }
+                };
+                p.Start();
+                var _response = p.StandardOutput.ReadToEnd();
+                if (_response.Contains("The requested operation requires elevation."))
+                {
+                    throw new ApplicationException("Runing the \"route add\" command requires elevation. Run this tool as administrator.");
                 }
-            };
-            p.Start();
-            var _response = p.StandardOutput.ReadToEnd();
-            if (_response.Contains("The requested operation requires elevation."))
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                throw new ApplicationException("Runing the \"route add\" command requires elevation. Run this tool as administrator.");
+                $"sudo ip route delete {target.ToString()}".Bash();
+            }
+            else
+            {
+                throw new NotSupportedException("Platform is not supported at this time.");
             }
         }
     }
